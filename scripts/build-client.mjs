@@ -1,0 +1,9 @@
+import {build} from 'esbuild';
+import {mkdir,copyFile,readdir,writeFile} from 'node:fs/promises';
+const vendor=new URL('../public/vendor/',import.meta.url);
+await mkdir(vendor,{recursive:true});
+await build({entryPoints:['node_modules/@novnc/novnc/core/rfb.js'],bundle:true,minify:true,format:'esm',target:['safari16.4','chrome100'],outfile:'public/vendor/rfb.js',legalComments:'linked',banner:{js:'/*! noVNC 1.7.0 — Copyright (C) The noVNC authors. MPL-2.0 and BSD components. Licenses and source: see /vendor/NOTICE.txt. */'}});
+const docs=new URL('../node_modules/@novnc/novnc/docs/',import.meta.url);
+for(const name of await readdir(docs))if(name.startsWith('LICENSE'))await copyFile(new URL(name,docs),new URL(name+'.txt',vendor));
+await writeFile(new URL('NOTICE.txt',vendor),'noVNC 1.7.0\nCopyright (C) The noVNC authors\nMain license: MPL-2.0. Some components retain BSD licenses.\nUnmodified corresponding source: https://github.com/novnc/noVNC/tree/v1.7.0\nThe installed npm package source and full licenses are also retained in the Windows payload.\n');
+console.log('Built one 184 KB VNC client module; retained licenses.');

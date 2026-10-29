@@ -1,0 +1,15 @@
+node_modules/
+.runtime/
+*.log
+.build/
+build/
+dist/
+downloads/
+*.spec
+*.keystore
+*.jks
+__pycache__/
+android/local.properties
+.vercel/
+ios/.vercel/
+.env*

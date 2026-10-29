@@ -1,0 +1,5 @@
+noVNC 1.7.0
+Copyright (C) The noVNC authors
+Main license: MPL-2.0. Some components retain BSD licenses.
+Unmodified corresponding source: https://github.com/novnc/noVNC/tree/v1.7.0
+The installed npm package source and full licenses are also retained in the Windows payload.
