@@ -159,9 +159,27 @@ def stop_owned():
     owned_process = None
 
 
+def install_gui_for_current_user():
+    if not getattr(sys,'frozen',False):return
+    directory=Path(os.environ.get('LOCALAPPDATA','.'))/'Programs'/'Haven'
+    directory.mkdir(parents=True,exist_ok=True)
+    target=directory/'Haven.exe'
+    if Path(sys.executable).resolve()==target.resolve():return
+    try:
+        shutil.copy2(sys.executable,target)
+        executable=str(target).replace("'","''")
+        working=str(directory).replace("'","''")
+        script="$shell=New-Object -ComObject WScript.Shell; foreach($folder in @([Environment]::GetFolderPath('Programs'),[Environment]::GetFolderPath('Desktop'))){if($folder){$link=$shell.CreateShortcut((Join-Path $folder 'Haven - Remote Desktop.lnk'));$link.TargetPath='"+executable+"';$link.WorkingDirectory='"+working+"';$link.IconLocation='"+executable+",0';$link.Save()}}"
+        run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],timeout=15)
+    except OSError:
+        # Running portably remains supported if the user profile is read-only.
+        pass
+
+
 def launch():
     global owned_process
     import webview
+    install_gui_for_current_user()
     local = Path(os.environ.get('LOCALAPPDATA', '.')) / 'Haven'
     local.mkdir(parents=True, exist_ok=True)
     state = STATE if (STATE / 'installed.ok').exists() else local

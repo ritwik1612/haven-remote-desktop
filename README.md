@@ -29,6 +29,8 @@ Requires Windows 10/11 x64, Microsoft Edge WebView2 Runtime, internet, and a per
 6. Open **Security → Set session PIN**. Choose six digits, confirm them, and save. Haven stores a salted hash, not the PIN itself.
 7. Open **Connect phone** and follow Android or iPhone instructions below. Approve the first request under **Devices**.
 
+Opening the packaged desktop app installs its GUI under your user profile and creates Start menu/Desktop shortcuts. The privileged background components remain under Program Files. This PC's installed host has been verified running; no restart or lock-screen test is performed automatically.
+
 After setup the PC must remain **on, awake, and online**. Haven cannot answer while the PC is off or asleep. The Haven PIN authorizes a connection; it is separate from the Windows password. If Windows is locked, use its normal sign-in screen inside the remote desktop. The background service is required for that screen; the development capture preview cannot control it.
 
 The Haven EXE is an **unsigned development build**. Windows may show a publisher/reputation warning. Do not disable antivirus or certificate verification. The bundled TightVNC MSI is the official signed GPL installer.
@@ -48,7 +50,7 @@ Requires Android 8+ and an updated Android System WebView/Chrome.
 
 1. Install Tailscale from Google Play. Use the PC's account and connect the VPN.
 2. Download **Haven-Android.apk** from [Releases](https://github.com/ritwik1612/haven-remote-desktop/releases/latest). Review Android's sideload prompt and install if you trust this build.
-3. Open Haven and enter the PC's private HTTPS `.ts.net` link, including `:8443` when shown. Tap **Connect to my laptop**.
+3. Open Haven and enter the PC's private HTTPS `.ts.net` link, including `:8443` when shown. Tap **Connect to PC**.
 4. Enter the PC's generated onboarding code, name the phone, and tap **Connect to PC**.
 5. Open **Devices** on Windows and approve control or view-only access.
 6. On later visits, enter your chosen six-digit PIN for six-hour access.
@@ -70,9 +72,9 @@ iOS may suspend networking in the background. Reopen Haven to resume an unexpire
 
 ### Optional Vercel setup page
 
-The `ios/` folder is a small public iPhone setup page. It opens your private PC link and explains Home Screen installation. **It never accepts a PIN or relays desktop traffic.** A laptop address supplied in `#host=...` stays in the URL fragment, which is not sent to Vercel by normal HTTP navigation.
+The [iPhone setup page](https://haven-ios.vercel.app) is live on Vercel. Its source is in `ios/`. It opens your private PC link and explains Home Screen installation. **It never accepts a PIN or relays desktop traffic.** A laptop address supplied in `#host=...` stays in the URL fragment, which is not sent to Vercel by normal HTTP navigation.
 
-Install the actual Home Screen app **from your private PC page**, not the public setup page. Vercel is optional: use the private link directly. The deployed setup URL is recorded in release notes once published.
+Install the actual Home Screen app **from your private PC page**, not the public setup page. Vercel is optional: use the private link directly. The setup deployment is static and runs no remote-desktop server or Vercel Functions.
 
 ## Phone controls
 
@@ -103,7 +105,7 @@ The installed host uses changed-region VNC updates, a persistent WebSocket, low 
 
 Close the dashboard when unused; its WebView and animations are separate from the service. An idle VNC host does not start the Python capture helper. The capture-preview helper exits after 30 seconds without work. The wrapper uses installed .NET Framework. Node's JavaScript heap is capped at 96 MB in service mode; this is **not** a cap on total RAM.
 
-One isolated development measurement was **54 MB Node RSS / 8 MB heap**, with no capture helper running. It excludes TightVNC, the wrapper, Tailscale, and an open desktop window. Installed total idle memory still needs measurement after service installation.
+The installed host measured about **95 MB combined idle working set** on the development PC: Node 56 MB, the service wrapper 26 MB, and TightVNC 13 MB. This excludes Tailscale and an open dashboard. Working sets can change during/after a session and include shared pages; this is a measurement, not a guaranteed limit.
 
 ## Access protections
 
@@ -152,7 +154,8 @@ The Android tools/JDK come from official sources and build locally, with no clou
 - Windows bundle checks include assets, Node syntax, WebView import and packaged native capture. Release checks are rerun after final packaging.
 - The official TightVNC MSI signature was verified. Real RFB 3.8 password authentication and read-only 2880 × 1800 framebuffer delivery passed. This check sends no real mouse/keyboard input.
 - Browser checks cover desktop/390px phone layouts, PIN mismatch, onboarding/approval, device navigation, modifier highlighting, Win+L and Ctrl+Shift+Esc against a mock host, disconnect, and PIN-only reconnect.
-- Full boot/lock-screen service tests and physical iPhone/Android tests require installation/device access. Browser viewport testing does not substitute for Safari/WebView hardware testing. Release notes record final hashes and remaining limits.
+- Installed host: both services run with Automatic startup. The installed VNC service passed view-only authentication and real screen delivery at 2880 × 1800. A live noVNC browser connection also rendered the full desktop with input disabled.
+- Reboot/locked-screen tests and physical iPhone/Android tests have not been performed. Browser viewport testing does not substitute for Safari/WebView hardware testing. Release notes record final hashes and remaining limits.
 
 ## Stop or remove
 

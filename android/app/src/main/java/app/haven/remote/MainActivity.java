@@ -47,7 +47,7 @@ public class MainActivity extends Activity {
         layout.addView(text("Connect Tailscale, then enter the private laptop link shown in Haven on your computer.",15,Color.rgb(174,150,194)));
         EditText host=new EditText(this);host.setSingleLine(true);host.setTextSize(15);host.setTextColor(Color.WHITE);host.setHintTextColor(Color.rgb(137,115,157));host.setHint("https://your-laptop.tailnet.ts.net:8443");host.setInputType(17);
         host.setText(getPreferences(MODE_PRIVATE).getString("host",""));layout.addView(host,new LinearLayout.LayoutParams(-1,dp(62)));
-        Button connect=new Button(this);connect.setText("Connect to my laptop");connect.setTextColor(background);connect.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(193,160,233)));layout.addView(connect,new LinearLayout.LayoutParams(-1,dp(55)));
+        Button connect=new Button(this);connect.setText("Connect to PC");connect.setTextColor(background);connect.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(152,92,255)));layout.addView(connect,new LinearLayout.LayoutParams(-1,dp(55)));
         layout.addView(text("Pair once. Enter your six-digit PIN for a six-hour session. Your PIN is never saved in this app.",12,Color.rgb(150,128,170)));
         connect.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){try {
             String value=host.getText().toString().trim();if(!value.startsWith("https://"))value="https://"+value;
