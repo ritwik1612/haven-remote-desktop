@@ -31,6 +31,12 @@ Requires Windows 10/11 x64, Microsoft Edge WebView2 Runtime, internet, and a per
 
 Opening the packaged desktop app installs its GUI under your user profile and creates Start menu/Desktop shortcuts. The privileged background components remain under Program Files. This PC's installed host has been verified running; no restart or lock-screen test is performed automatically.
 
+### Notification-area logo
+
+Haven adds its purple logo to the Windows notification area/hidden-icons panel. It remains when the dashboard is closed and starts again at your next Windows login. Click it to open Haven; right-click for host status and **End current remote session**. **Exit tray icon** hides the icon but deliberately leaves the background service available. Windows controls whether an icon is in the overflow panel or pinned next to the clock.
+
+The tray is a separate .NET Framework notification process. It does not keep a WebView or capture loop alive and does not continuously poll the host. It reuses Windows' framework rather than bundling a Python runtime.
+
 After setup the PC must remain **on, awake, and online**. Haven cannot answer while the PC is off or asleep. The Haven PIN authorizes a connection; it is separate from the Windows password. If Windows is locked, use its normal sign-in screen inside the remote desktop. The background service is required for that screen; the development capture preview cannot control it.
 
 The Haven EXE is an **unsigned development build**. Windows may show a publisher/reputation warning. Do not disable antivirus or certificate verification. The bundled TightVNC MSI is the official signed GPL installer.
@@ -105,7 +111,7 @@ The installed host uses changed-region VNC updates, a persistent WebSocket, low 
 
 Close the dashboard when unused; its WebView and animations are separate from the service. An idle VNC host does not start the Python capture helper. The capture-preview helper exits after 30 seconds without work. The wrapper uses installed .NET Framework. Node's JavaScript heap is capped at 96 MB in service mode; this is **not** a cap on total RAM.
 
-The installed host measured about **95 MB combined idle working set** on the development PC: Node 56 MB, the service wrapper 26 MB, and TightVNC 13 MB. This excludes Tailscale and an open dashboard. Working sets can change during/after a session and include shared pages; this is a measurement, not a guaranteed limit.
+The installed host measured about **95 MB combined idle working set** on the development PC: Node 56 MB, the service wrapper 26 MB, and TightVNC 13 MB. The notification icon added about 35 MB, bringing host + tray to roughly **130 MB**, excluding Tailscale and an open dashboard. Working sets include shared pages and can change during/after a session; these are measurements, not guaranteed limits.
 
 ## Access protections
 

@@ -2,6 +2,7 @@
 from pathlib import Path
 import atexit
 import ctypes
+import hashlib
 import json
 import os
 import secrets
@@ -164,13 +165,22 @@ def install_gui_for_current_user():
     directory=Path(os.environ.get('LOCALAPPDATA','.'))/'Programs'/'Haven'
     directory.mkdir(parents=True,exist_ok=True)
     target=directory/'Haven.exe'
-    if Path(sys.executable).resolve()==target.resolve():return
     try:
-        shutil.copy2(sys.executable,target)
+        if Path(sys.executable).resolve()!=target.resolve():shutil.copy2(sys.executable,target)
+        tray=PAYLOAD/'HavenTray.exe';installed_tray=directory/'HavenTray.exe'
+        if tray.exists() and (not installed_tray.exists() or hashlib.sha256(tray.read_bytes()).digest()!=hashlib.sha256(installed_tray.read_bytes()).digest()):
+            if installed_tray.exists():
+                run([installed_tray,'--quit'],timeout=5)
+                time.sleep(.3)
+            shutil.copy2(tray,installed_tray)
         executable=str(target).replace("'","''")
         working=str(directory).replace("'","''")
         script="$shell=New-Object -ComObject WScript.Shell; foreach($folder in @([Environment]::GetFolderPath('Programs'),[Environment]::GetFolderPath('Desktop'))){if($folder){$link=$shell.CreateShortcut((Join-Path $folder 'Haven - Remote Desktop.lnk'));$link.TargetPath='"+executable+"';$link.WorkingDirectory='"+working+"';$link.IconLocation='"+executable+",0';$link.Save()}}"
         run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],timeout=15)
+        if (directory/'HavenTray.exe').exists():
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER,r'Software\Microsoft\Windows\CurrentVersion\Run') as registry:
+                winreg.SetValueEx(registry,'Haven - Remote Desktop',0,winreg.REG_SZ,'"'+str(directory/'HavenTray.exe')+'"')
+            subprocess.Popen([str(directory/'HavenTray.exe')],creationflags=HIDE)
     except OSError:
         # Running portably remains supported if the user profile is read-only.
         pass
@@ -224,7 +234,7 @@ if __name__ == '__main__':
     try:
         if '--self-test' in sys.argv:
             import webview
-            required=['server.mjs','public/index.html','public/app.js','public/polish.css','public/black.css','public/vendor/rfb.js','node.exe','HavenBridge.exe','HavenService.exe','tightvnc.msi','licenses/Node.txt']
+            required=['server.mjs','public/index.html','public/app.js','public/polish.css','public/black.css','public/vendor/rfb.js','node.exe','HavenBridge.exe','HavenTray.exe','HavenService.exe','tightvnc.msi','licenses/Node.txt']
             missing=[name for name in required if not (PAYLOAD/name).exists()]
             if missing:raise RuntimeError('Missing packaged assets: '+', '.join(missing))
             for name in ['server.mjs','public/app.js']:
