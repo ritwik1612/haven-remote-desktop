@@ -1,6 +1,6 @@
 {
   "name": "haven",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "Private Windows remote desktop prototype with an iPhone browser client",
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@novnc/novnc": "^1.7.0",
+    "jsqr": "1.4.0",
     "qrcode": "^1.5.4",
     "ws": "^8.22.0"
   },

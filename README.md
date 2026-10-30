@@ -183,3 +183,10 @@ The compact toolbar provides Info, Displays, Keyboard, and Disconnect. Tap the f
 - **Displays** offers **All displays** as one continuous Windows desktop, or individual connected monitors. This crops the viewer without changing Windows display settings. Display metadata comes from the small tray process at login and when the screen arrangement changes; before metadata is available, All displays still works. If the layout and VNC framebuffer disagree, Haven safely uses All displays.
 
 The iPhone setup page remembers only the laptop address in this browser. The private Home Screen app opens that PC directly. Pairing is kept in a secure browser cookie; use the same installed app after pairing. Clearing website data removes that credential and requires pairing again. If a paired PC has no PIN yet, the phone asks you to set it once in Windows Security settings instead of sending you back to onboarding. Network interruptions never intentionally forget the device.
+
+
+## Scan QR pairing
+
+Tap **Scan QR** in the phone app. On Windows, open **Connect phone** and generate a fresh pairing code/QR. Scan it: Haven fills the address and code automatically. Approve a new phone once under Windows **Devices**. A QR only pairs the phone; it never unlocks the desktop. After approval, enter your own six-digit session PIN to open a six-hour session. Saved PCs remain until you remove them or clear/uninstall the app; browsers can also evict website data. Away from the PC, the saved session PIN remains available for returning connections. A session PIN alone cannot pair an unknown device.
+
+**Use a pairing code instead** is the secondary onboarding option. On iPhone, grant camera permission when requested and use the private Home Screen app for a consistent saved pairing. Android's updated APK requests camera access only for scanning; camera hardware is optional. QR images are decoded locally, and the camera stops on success, cancel, or leaving the scanner. The Vercel page never proxies authentication or desktop traffic. QR codes expire after two minutes, are single-use, and never contain your session PIN.

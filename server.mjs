@@ -60,16 +60,16 @@ export function createHaven({bridge=new WindowsBridge(), remoteUrl='', now=()=>D
   function cookie(req,name){const value=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(name+'='));return value?.slice(name.length+1)||'';}
   function cookieHeader(req,name,value,age){return `${name}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${age}${localHost(req.headers.host)?'':'; Secure'}`;}
   function admin(req){if(!localHost(req.headers.host)||req.headers['x-forwarded-for']||req.headers['tailscale-user-login']||!adminSessions.has(hash(cookie(req,'dl_admin'))))throw fail(403,'Open the host dashboard on the laptop to manage access.');}
-  function remote(req,approved=true){expire();if(!session||hash(cookie(req,'dl_remote'))!==session.tokenHash)throw fail(401,'Session ended. Enter your session PIN to reconnect.');if(approved&&session.status!=='approved')throw fail(403,'Waiting for approval on the laptop.');return session;}
+  function remote(req,approved=true){expire();if(!session||hash(cookie(req,'dl_remote'))!==session.tokenHash)throw fail(401,'Session ended. Enter your session PIN to reconnect.');if(approved&&session.status!=='approved')throw fail(403,'Waiting for approval on the laptop.');if(approved&&!session.pinAuthenticated)throw fail(403,'Enter your chosen session PIN on the paired phone.');return session;}
   function device(req){const tokenHash=hash(cookie(req,'dl_device'));return security.devices.find(d=>d.tokenHash===tokenHash);}
   async function save(){await persist(structuredClone(security));}
-  function newSession(name,token,deviceHash,status='approved'){return {id:crypto.randomUUID(),name,tokenHash:hash(token),deviceHash,status,mode:'control',createdAt:now(),expiresAt:now()+(status==='pending'?90000:SESSION_MS),lastSeen:now(),inputWindow:now(),inputCount:0,lastFrame:0};}
+  function newSession(name,token,deviceHash,status='approved'){return {id:crypto.randomUUID(),name,tokenHash:hash(token),deviceHash,status,pinAuthenticated:status==='approved',mode:'control',createdAt:now(),expiresAt:now()+(status==='pending'?90000:SESSION_MS),lastSeen:now(),inputWindow:now(),inputCount:0,lastFrame:0};}
   function json(res,status,data,headers={}){res.writeHead(status,{'Content-Type':'application/json',...headers});res.end(JSON.stringify(data));}
   async function body(req){let chunks=[],size=0;for await(const chunk of req){size+=chunk.length;if(size>8192)throw fail(413,'Request too large.');chunks.push(chunk);}try{return JSON.parse(Buffer.concat(chunks).toString()||'{}');}catch{throw fail(400,'Invalid request.');}}
   const server=http.createServer(async(req,res)=>{
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Frame-Options','DENY');
     res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
-    res.setHeader('Permissions-Policy','camera=(), microphone=(), geolocation=()');
+    res.setHeader('Permissions-Policy','camera=(self), microphone=(), geolocation=()');
     try {
       expire(); const url=new URL(req.url,'http://localhost'); const route=url.pathname;
       const host=req.headers.host||'';
@@ -79,7 +79,7 @@ export function createHaven({bridge=new WindowsBridge(), remoteUrl='', now=()=>D
         if(origin.host!==host||(!localHost(host)&&origin.protocol!=='https:'))throw fail(403,'Cross-origin requests are blocked.');
         if(req.headers['content-type']?.split(';')[0]!=='application/json')throw fail(415,'JSON is required.');
       }
-      if(req.method==='GET'&&route==='/api/info')return json(res,200,{name:os.hostname(),platform:'Windows',local:localHost(host),remoteUrl,version:'0.1.1',backend:vncPassword?'vnc':'capture',unattended:!!vncPassword,pinConfigured:!!security.pinHash});
+      if(req.method==='GET'&&route==='/api/info')return json(res,200,{name:os.hostname(),platform:'Windows',local:localHost(host),remoteUrl,version:'0.1.2',backend:vncPassword?'vnc':'capture',unattended:!!vncPassword,pinConfigured:!!security.pinHash});
       if(req.method==='GET'&&route==='/api/device'){const d=device(req);return json(res,200,{paired:!!d,name:d?.name,pinConfigured:!!security.pinHash},d?{'Set-Cookie':cookieHeader(req,'dl_device',cookie(req,'dl_device'),31536000)}:{});}
       if(req.method==='GET'&&route==='/api/displays'){remote(req);let layout=null;try{layout=await displays();}catch{}return json(res,200,layout);}
       if(req.method==='POST'&&route==='/api/unlock'){
@@ -90,7 +90,7 @@ export function createHaven({bridge=new WindowsBridge(), remoteUrl='', now=()=>D
           const actual=crypto.scryptSync(data.pin,security.pinSalt,32);valid=crypto.timingSafeEqual(actual,Buffer.from(security.pinHash,'hex'));
         }
         if(!valid){if(++pinFailures>=5){pinLockedUntil=now()+15*60*1000;pinFailures=0;}throw fail(403,'Incorrect PIN, or no PIN has been set on the laptop.');}
-        pinFailures=0;end('A new PIN session replaced the previous session.');const token=secret();session=newSession(d.name,token,d.tokenHash);d.lastUsed=now();await save();record(`${d.name} unlocked a six-hour session.`);
+        pinFailures=0;end('A new PIN session replaced the previous session.');const token=secret();session=newSession(d.name,token,d.tokenHash);session.mode=d.mode||'control';d.lastUsed=now();await save();record(`${d.name} unlocked a six-hour session.`);
         return json(res,200,{status:'approved',expiresAt:session.expiresAt},{'Set-Cookie':cookieHeader(req,'dl_remote',token,SESSION_MS/1000)});
       }
       if(req.method==='POST'&&route==='/api/admin/login'){
@@ -117,7 +117,7 @@ export function createHaven({bridge=new WindowsBridge(), remoteUrl='', now=()=>D
           const data=await body(req);if(!session||session.status!=='pending'||data.id!==session.id)throw fail(409,'This request has expired.');
           if(!['view','control'].includes(data.mode))throw fail(400,'Select an access mode.');
           session.status='approved';session.mode=data.mode;session.expiresAt=now()+SESSION_MS;session.lastSeen=now();
-          if(session.deviceHash){security.devices.push({id:crypto.randomUUID(),name:session.name,tokenHash:session.deviceHash,lastUsed:now()});await save();}
+          if(session.deviceHash){security.devices.push({id:crypto.randomUUID(),name:session.name,tokenHash:session.deviceHash,mode:session.mode,lastUsed:now()});await save();}
           record(`${session.name} paired and approved for ${data.mode==='control'?'screen and input':'view only'}.`);return json(res,200,{ok:true});
         }
         if(req.method==='POST'&&route==='/api/admin/revoke'){pairing=null;end('Access revoked on the laptop.');return json(res,200,{ok:true});}
@@ -134,10 +134,11 @@ export function createHaven({bridge=new WindowsBridge(), remoteUrl='', now=()=>D
         }
         if(session)throw fail(409,'Another device is already connected.');
         const name=String(data.name||'iPhone').replace(/[\x00-\x1f\x7f]/g,'').trim().slice(0,50)||'iPhone';
+        const trusted=device(req);if(trusted){pairing=null;return json(res,200,{status:'paired'});}
         const token=secret(),deviceToken=secret();session=newSession(name,token,hash(deviceToken),'pending');session.mode='view';
         pairing=null;record(`${name} requested access. Awaiting laptop approval.`);return json(res,200,{status:'pending'},{'Set-Cookie':[cookieHeader(req,'dl_remote',token,SESSION_MS/1000),cookieHeader(req,'dl_device',deviceToken,365*86400)]});
       }
-      if(req.method==='GET'&&route==='/api/session'){const s=remote(req,false);return json(res,200,{status:s.status,name:s.name,mode:s.mode,expiresAt:s.expiresAt});}
+      if(req.method==='GET'&&route==='/api/session'){const s=remote(req,false);return json(res,200,{status:s.status==='approved'&&!s.pinAuthenticated?'paired':s.status,name:s.name,mode:s.mode,expiresAt:s.expiresAt});}
       if(req.method==='GET'&&route==='/api/vnc'){const s=remote(req);if(!vncPassword)throw fail(409,'Install the background host to enable VNC.');return json(res,200,{password:s.mode==='view'?vncViewPassword:vncPassword,expiresAt:s.expiresAt});}
       if(req.method==='POST'&&route==='/api/disconnect'){remote(req,false);end('Device disconnected.');return json(res,200,{ok:true},{'Set-Cookie':cookieHeader(req,'dl_remote','',0)});}
       if(req.method==='GET'&&route==='/api/frame'){
@@ -169,7 +170,7 @@ export function createHaven({bridge=new WindowsBridge(), remoteUrl='', now=()=>D
         if(!file.startsWith(base+path.sep)||!file.endsWith('.js'))throw fail(404,'Not found.');
         const data=await readFile(file);res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8'});return res.end(data);
       }
-      const assets={'/':'index.html','/connect':'index.html','/app.js':'app.js','/style.css':'style.css','/polish.css':'polish.css','/black.css':'black.css','/remote.css':'remote.css','/remote-view.js':'remote-view.js','/vendor/rfb.js':'vendor/rfb.js','/vendor/rfb.js.LEGAL.txt':'vendor/rfb.js.LEGAL.txt','/icon.svg':'icon.svg','/manifest.webmanifest':'manifest.webmanifest','/sw.js':'sw.js','/offline.html':'offline.html','/apple-touch-icon.png':'apple-touch-icon.png','/icon-192.png':'icon-192.png','/icon-512.png':'icon-512.png'};
+      const assets={'/':'index.html','/connect':'index.html','/app.js':'app.js','/style.css':'style.css','/polish.css':'polish.css','/black.css':'black.css','/remote.css':'remote.css','/qr.css':'qr.css','/qr-scanner.js':'qr-scanner.js','/remote-view.js':'remote-view.js','/vendor/rfb.js':'vendor/rfb.js','/vendor/rfb.js.LEGAL.txt':'vendor/rfb.js.LEGAL.txt','/icon.svg':'icon.svg','/manifest.webmanifest':'manifest.webmanifest','/sw.js':'sw.js','/offline.html':'offline.html','/apple-touch-icon.png':'apple-touch-icon.png','/icon-192.png':'icon-192.png','/icon-512.png':'icon-512.png'};
       if(req.method==='GET'&&assets[route]){const file=assets[route],data=await readFile(path.join(root,'public',file));const ext=path.extname(file);res.writeHead(200,{'Content-Type':({'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json','.txt':'text/plain; charset=utf-8'})[ext]});return res.end(data);}
       throw fail(404,'Not found.');
     }catch(error){if(!res.headersSent)json(res,error.status||503,{error:error.status?error.message:'The Windows host is unavailable. Unlock the laptop or restart Haven.'});else res.end();}

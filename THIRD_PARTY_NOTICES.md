@@ -21,3 +21,7 @@ Haven's original source is MIT licensed. The bundled components retain their own
 The unmodified TightVNC corresponding source archive is supplied alongside the Windows release. The installer is the GPL 2.x edition, not TightVNC Pro or its paid SDK. VNC listens on loopback; Tailscale and Haven protect network access.
 
 Licenses included by npm and Python packages are retained in the packaged payload. Tailscale and Microsoft WebView2 are separate system prerequisites and are not sold or relicensed by Haven. Android build tools and the Temurin JDK are used locally for compilation and are not included in the APK.
+
+## jsQR 1.4.0
+
+Copyright Cosmo Wolfe. Apache License 2.0. The QR decoder runs locally on the phone. License: `public/vendor/jsqr-LICENSE.txt` (also included with the static iOS setup page). Source: https://github.com/cozmo/jsQR

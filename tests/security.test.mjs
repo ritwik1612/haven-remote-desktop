@@ -4,7 +4,7 @@ import http from 'node:http';
 import {createHaven,WindowsBridge} from '../server.mjs';
 
 async function fixture(t,options={}){
-  let time=Date.now();const commands=[];
+  let time=Date.now(),lastDevice;const commands=[];
   const bridge={async send(command,guard=()=>true){if(!guard())throw new Error('Session ended');commands.push(command);return {ok:true,jpeg:Buffer.from([255,216,255,217]).toString('base64'),width:1920,height:1080};},close(){}};
   const security={devices:[]};let stored;
   const app=createHaven({bridge,now:()=>time,remoteUrl:'https://desk.tailnet.ts.net:8443',security,persist:async data=>{stored=data;},...options});
@@ -21,10 +21,11 @@ async function fixture(t,options={}){
   const login=await request('/api/admin/login',{data:{token:app.adminToken}});
   const admin=login.headers.get('set-cookie').split(';')[0];
   async function code(){const response=await request('/api/admin/pair',{data:{},cookie:admin});assert.equal(response.status,200);return (await response.json()).code;}
-  async function pair(){const response=await request('/api/pair',{data:{code:await code(),name:'Test iPhone'}});assert.equal(response.status,200);return response.headers.get('set-cookie').split(';')[0];}
-  async function pairDevice(){const response=await request('/api/pair',{data:{code:await code(),name:'Test iPhone'}});assert.equal(response.status,200);const cookies=response.headers.getSetCookie();return {cookie:cookies.find(c=>c.startsWith('dl_remote=')).split(';')[0],device:cookies.find(c=>c.startsWith('dl_device=')).split(';')[0]};}
+  async function pair(){await request('/api/admin/pin',{cookie:admin,data:{pin:'824617'}});return (await pairDevice()).cookie;}
+  async function pairDevice(){const response=await request('/api/pair',{data:{code:await code(),name:'Test iPhone'}});assert.equal(response.status,200);const cookies=response.headers.getSetCookie();lastDevice=cookies.find(c=>c.startsWith('dl_device=')).split(';')[0];return {cookie:cookies.find(c=>c.startsWith('dl_remote=')).split(';')[0],device:lastDevice};}
+  async function unlock(pin='824617'){if(!security.pinHash)await request('/api/admin/pin',{cookie:admin,data:{pin}});const response=await request('/api/unlock',{cookie:lastDevice,data:{pin}});assert.equal(response.status,200);return response.headers.get('set-cookie').split(';')[0];}
   async function approve(mode='control'){const response=await request('/api/admin/state',{cookie:admin});const state=await response.json();return request('/api/admin/approve',{cookie:admin,data:{id:state.session.id,mode}});}
-  return {request,admin,code,pair,pairDevice,approve,commands,security,get stored(){return stored;},advance(ms){time+=ms;}};
+  return {request,admin,code,pair,pairDevice,approve,unlock,commands,security,get stored(){return stored;},advance(ms){time+=ms;}};
 }
 
 test('unauthenticated visitors cannot see frames, send input, or manage pairing',async t=>{
@@ -37,37 +38,52 @@ test('unauthenticated visitors cannot see frames, send input, or manage pairing'
   assert.equal(f.commands.length,0);
 });
 test('a valid pairing code never grants screen access without laptop approval',async t=>{
-  const f=await fixture(t),cookie=await f.pair();
+  const f=await fixture(t);let cookie=await f.pair();
   assert.equal((await f.request('/api/session',{cookie})).status,200);
   assert.equal((await f.request('/api/frame',{cookie})).status,403);
   assert.equal((await f.request('/api/input',{cookie,data:{type:'text',text:'no'}})).status,403);
   assert.equal(f.commands.length,0);
   assert.equal((await f.approve()).status,200);
+  assert.equal((await f.request('/api/frame',{cookie})).status,403);cookie=await f.unlock();
   assert.equal((await f.request('/api/frame',{cookie})).status,200);
   assert.equal((await f.request('/api/input',{cookie,data:{type:'text',text:'hello'}})).status,200);
-  assert.deepEqual(f.commands.map(c=>c.type),['capture','text']);
+  assert.deepEqual(f.commands.filter(c=>c.type!=='release').map(c=>c.type),['capture','text']);
 });
 test('paired phones without a PIN stay paired; display layout requires an approved unexpired session',async t=>{
   const layout={width:3840,height:1080,screens:[{x:0,y:0,width:1920,height:1080},{x:1920,y:0,width:1920,height:1080}]};
-  const f=await fixture(t,{displays:async()=>layout});const {cookie,device}=await f.pairDevice();
+  const f=await fixture(t,{displays:async()=>layout});let {cookie,device}=await f.pairDevice();
   assert.equal((await f.request('/api/displays',{cookie})).status,403);
   await f.approve();
   const paired=await f.request('/api/device',{cookie:device});
   assert.deepEqual(await paired.json(),{paired:true,name:'Test iPhone',pinConfigured:false});
   assert.match(paired.headers.get('set-cookie'),/Max-Age=31536000/);
+  assert.equal((await f.request('/api/displays',{cookie})).status,403);cookie=await f.unlock();
   assert.deepEqual(await (await f.request('/api/displays',{cookie})).json(),layout);
   f.advance(21600001);
   assert.equal((await f.request('/api/displays',{cookie})).status,401);
   assert.equal((await (await f.request('/api/device',{cookie:device})).json()).paired,true);
 });
+test('a fresh QR never bypasses the chosen PIN, including after laptop approval and on an already paired phone',async t=>{
+  const f=await fixture(t);const {device,cookie}=await f.pairDevice();await f.approve();
+  assert.equal((await (await f.request('/api/session',{cookie})).json()).status,'paired');
+  assert.equal((await f.request('/api/frame',{cookie})).status,403);
+  assert.equal((await f.request('/api/input',{cookie,data:{type:'keys',keys:['Meta']}})).status,403);
+  await f.request('/api/admin/revoke',{cookie:f.admin,data:{}});
+  const code=await f.code();const response=await f.request('/api/pair',{cookie:device,data:{code}});
+  assert.equal((await response.json()).status,'paired');assert.equal(response.headers.get('set-cookie'),null);
+  assert.equal((await f.request('/api/frame',{cookie})).status,401);
+  assert.equal(f.security.devices.length,1);
+  assert.equal((await f.request('/api/pair',{cookie:device,data:{code}})).status,403);
+  const unlocked=await f.unlock();assert.equal((await f.request('/api/frame',{cookie:unlocked})).status,200);
+});
 test('view-only permission is enforced by the server',async t=>{
-  const f=await fixture(t),cookie=await f.pair();await f.approve('view');
+  const f=await fixture(t);let cookie=await f.pair();await f.approve('view');cookie=await f.unlock();
   assert.equal((await f.request('/api/frame',{cookie})).status,200);
   assert.equal((await f.request('/api/input',{cookie,data:{type:'pointer',x:.5,y:.5,action:'click'}})).status,403);
   assert.equal(f.commands.some(c=>c.type==='pointer'),false);
 });
 test('revocation invalidates an approved session and prevents reuse',async t=>{
-  const f=await fixture(t),cookie=await f.pair();await f.approve();
+  const f=await fixture(t);let cookie=await f.pair();await f.approve();cookie=await f.unlock();
   await f.request('/api/admin/revoke',{cookie:f.admin,data:{}});
   assert.equal((await f.request('/api/frame',{cookie})).status,401);
   assert.equal((await f.request('/api/input',{cookie,data:{type:'keys',keys:['Enter']}})).status,401);
@@ -100,7 +116,7 @@ test('private HTTPS clients receive HttpOnly Secure session cookies',async t=>{
 test('pending sessions expire; approved sessions remain usable for exactly six hours',async t=>{
   const f=await fixture(t);let cookie=await f.pair();f.advance(90001);
   assert.equal((await f.request('/api/session',{cookie})).status,401);
-  cookie=await f.pair();await f.approve();f.advance(30001);
+  cookie=await f.pair();await f.approve();cookie=await f.unlock();f.advance(30001);
   assert.equal((await f.request('/api/frame',{cookie})).status,200);
   f.advance(6*60*60*1000-30001-1);
   assert.equal((await f.request('/api/session',{cookie})).status,200);
@@ -150,22 +166,22 @@ test('persisted pairing and PIN survive a host restart while old sessions do not
   assert.equal((await restarted.request('/api/unlock',{cookie:device,data:{pin:'007315'}})).status,200);
 });
 test('Win+L and Ctrl+Shift+Escape are sent as a single command with all keys together',async t=>{
-  const f=await fixture(t),cookie=await f.pair();await f.approve();
+  const f=await fixture(t);let cookie=await f.pair();await f.approve();cookie=await f.unlock();
   for(const keys of [['Meta','L'],['Control','Shift','Escape'],['Alt','Tab'],['Control','C'],['F12']])assert.equal((await f.request('/api/input',{cookie,data:{type:'keys',keys}})).status,200);
-  assert.deepEqual(f.commands[0],{type:'keys',keys:['Meta','L']});assert.deepEqual(f.commands[1],{type:'keys',keys:['Control','Shift','Escape']});
+  const sent=f.commands.filter(c=>c.type==='keys');assert.deepEqual(sent[0],{type:'keys',keys:['Meta','L']});assert.deepEqual(sent[1],{type:'keys',keys:['Control','Shift','Escape']});
 });
 test('VNC credentials require approval and use a separate password for view-only mode',async t=>{
   const f=await fixture(t,{vncPassword:'control-secret',vncViewPassword:'view-secret'});
-  assert.equal((await f.request('/api/vnc')).status,401);const cookie=await f.pair();
-  assert.equal((await f.request('/api/vnc',{cookie})).status,403);await f.approve('view');
+  assert.equal((await f.request('/api/vnc')).status,401);let cookie=await f.pair();
+  assert.equal((await f.request('/api/vnc',{cookie})).status,403);await f.approve('view');assert.equal((await f.request('/api/vnc',{cookie})).status,403);cookie=await f.unlock();
   const data=await (await f.request('/api/vnc',{cookie})).json();assert.equal(data.password,'view-secret');assert.equal(JSON.stringify(data).includes('control-secret'),false);
 });
 test('input validation rejects arbitrary commands and out-of-bounds coordinates',async t=>{
-  const f=await fixture(t),cookie=await f.pair();await f.approve();
+  const f=await fixture(t);let cookie=await f.pair();await f.approve();cookie=await f.unlock();
   for(const data of [{type:'shell',command:'anything'},{type:'pointer',x:10,y:.5,action:'click'},{type:'keys',keys:['Unknown']},{type:'text',text:'a'.repeat(501)}]){
     assert.equal((await f.request('/api/input',{cookie,data})).status,400);
   }
-  assert.equal(f.commands.length,0);
+  assert.equal(f.commands.filter(c=>c.type!=='release').length,0);
 });
 test('native commands whose authorization was revoked in the queue never execute',async()=>{
   const bridge=new WindowsBridge();await assert.rejects(bridge.send({type:'text',text:'must not type'},()=>false),/Session ended/);assert.equal(bridge.child,null);

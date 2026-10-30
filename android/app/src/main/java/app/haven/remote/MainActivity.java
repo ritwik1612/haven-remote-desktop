@@ -11,6 +11,10 @@ import android.view.WindowInsets;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
 import android.webkit.CookieManager;
+import android.webkit.WebChromeClient;
+import android.webkit.PermissionRequest;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -28,6 +32,7 @@ import java.net.URI;
 public class MainActivity extends Activity {
     private WebView web;
     private String allowedOrigin;
+    private PermissionRequest cameraRequest;
     private final int background=Color.BLACK;
     private int dp(int n) {return Math.round(n*getResources().getDisplayMetrics().density);}
     @Override public void onCreate(Bundle saved) {
@@ -44,6 +49,13 @@ public class MainActivity extends Activity {
         ImageView logo=new ImageView(this);logo.setImageResource(R.drawable.haven_icon);layout.addView(logo,new LinearLayout.LayoutParams(dp(60),dp(60)));
         layout.addView(text("Haven",32,Color.rgb(242,230,251)));
         layout.addView(text("Your space.\nNo distance.",38,Color.rgb(221,190,246)));
+        final String savedHost=getPreferences(MODE_PRIVATE).getString("host","");
+        if(!savedHost.isEmpty()){
+            Button savedPc=new Button(this);savedPc.setText("Connect saved PC");savedPc.setTextColor(Color.WHITE);savedPc.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(119,61,216)));layout.addView(savedPc,new LinearLayout.LayoutParams(-1,dp(60)));
+            savedPc.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){try{URI uri=new URI(savedHost);if(!"https".equals(uri.getScheme())||uri.getHost()==null||!uri.getHost().endsWith(".ts.net")||uri.getUserInfo()!=null)throw new Exception();allowedOrigin=savedHost;openDesktop();}catch(Exception error){Toast.makeText(MainActivity.this,"Enter the laptop address again.",Toast.LENGTH_LONG).show();}}});
+        }
+        Button scan=new Button(this);scan.setText("Scan QR");scan.setTextColor(Color.WHITE);scan.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(119,61,216)));layout.addView(scan,new LinearLayout.LayoutParams(-1,dp(60)));
+        scan.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){allowedOrigin="https://haven-ios.vercel.app";openDesktop("https://haven-ios.vercel.app/#scan");}});
         layout.addView(text("Connect Tailscale, then enter the private laptop link shown in Haven on your computer.",15,Color.rgb(174,150,194)));
         EditText host=new EditText(this);host.setSingleLine(true);host.setTextSize(15);host.setTextColor(Color.WHITE);host.setHintTextColor(Color.rgb(137,115,157));host.setHint("https://your-laptop.tailnet.ts.net:8443");host.setInputType(17);
         host.setText(getPreferences(MODE_PRIVATE).getString("host",""));layout.addView(host,new LinearLayout.LayoutParams(-1,dp(62)));
@@ -60,7 +72,8 @@ public class MainActivity extends Activity {
         }catch(Exception error){Toast.makeText(MainActivity.this,"Enter the HTTPS .ts.net link from your laptop.",Toast.LENGTH_LONG).show();}}});
         setContentView(layout);
     }
-    private void openDesktop() {
+    private void openDesktop() {openDesktop(allowedOrigin+"/connect");}
+    private void openDesktop(String startUrl) {
         web=new WebView(this);web.setBackgroundColor(background);
         web.getSettings().setJavaScriptEnabled(true);web.getSettings().setDomStorageEnabled(true);
         web.getSettings().setAllowFileAccess(false);web.getSettings().setAllowContentAccess(false);
@@ -70,6 +83,9 @@ public class MainActivity extends Activity {
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
                 Uri url=request.getUrl();String origin=url.getScheme()+"://"+url.getHost()+(url.getPort()==-1?"":":"+url.getPort());
                 if(allowedOrigin.equals(origin))return false;
+                if("https://haven-ios.vercel.app".equals(allowedOrigin)&&"https".equals(url.getScheme())&&url.getHost()!=null&&url.getHost().endsWith(".ts.net")&&"/connect".equals(url.getPath())&&url.getUserInfo()==null&&url.getQuery()==null&&url.getFragment()!=null&&url.getFragment().matches("pair=[0-9]{6}")){
+                    allowedOrigin=origin;getPreferences(MODE_PRIVATE).edit().putString("host",origin).apply();return false;
+                }
                 if("https".equals(url.getScheme()))startActivity(new Intent(Intent.ACTION_VIEW,url));
                 return true;
             }
@@ -77,9 +93,26 @@ public class MainActivity extends Activity {
             @Override public void onReceivedError(WebView view,WebResourceRequest request,WebResourceError error){if(request.isForMainFrame())Toast.makeText(MainActivity.this,"Laptop unreachable. Check Tailscale and that the background host is running.",Toast.LENGTH_LONG).show();}
             @Override public void onPageFinished(WebView view,String url){CookieManager.getInstance().flush();}
         });
+        web.setWebChromeClient(new WebChromeClient(){
+            @Override public void onPermissionRequest(final PermissionRequest request){runOnUiThread(new Runnable(){@Override public void run(){
+                boolean video=false;for(String resource:request.getResources())if(PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource))video=true;
+                if(!video||!allowedOrigin.equals(request.getOrigin().toString().replaceAll("/$",""))){request.deny();return;}
+                if(cameraRequest!=null)cameraRequest.deny();cameraRequest=request;
+                if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)finishCameraPermission(true);
+                else requestPermissions(new String[]{Manifest.permission.CAMERA},543);
+            }});}
+            @Override public void onPermissionRequestCanceled(PermissionRequest request){if(cameraRequest==request)cameraRequest=null;}
+        });
         LinearLayout frame=new LinearLayout(this);frame.setOrientation(LinearLayout.VERTICAL);frame.setBackgroundColor(background);frame.addView(web,new LinearLayout.LayoutParams(-1,-1));
         frame.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener(){@Override public WindowInsets onApplyWindowInsets(View v,WindowInsets insets){v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;}});
-        setContentView(frame);web.loadUrl(allowedOrigin+"/connect");
+        setContentView(frame);web.loadUrl(startUrl);
     }
+    private void finishCameraPermission(boolean granted){
+        PermissionRequest request=cameraRequest;cameraRequest=null;if(request==null)return;
+        if(granted&&allowedOrigin.equals(request.getOrigin().toString().replaceAll("/$","")))request.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});else request.deny();
+    }
+    @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){super.onRequestPermissionsResult(code,permissions,results);if(code==543)finishCameraPermission(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED);}
+    @Override protected void onPause(){if(web!=null){if(cameraRequest==null)web.evaluateJavascript("window.dispatchEvent(new Event('haven-background'))",null);web.onPause();}super.onPause();}
+    @Override protected void onResume(){super.onResume();if(web!=null)web.onResume();}
     @Override public void onBackPressed(){if(web!=null){web.destroy();web=null;showSetup();}else super.onBackPressed();}
 }
