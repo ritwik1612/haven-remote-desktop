@@ -19,7 +19,7 @@ app=BUILD/'Build/Products/Release-iphoneos/Haven.app'
 with (app/'Info.plist').open('rb') as handle:info=plistlib.load(handle)
 assert info['CFBundleIdentifier']=='app.haven.remote'
 assert info['CFBundleShortVersionString']=='0.1.3'
-subprocess.run(['xcrun','lipo','-verify_arch','arm64',str(app/info['CFBundleExecutable'])],check=True)
+subprocess.run(['xcrun','lipo',str(app/info['CFBundleExecutable']),'-verify_arch','arm64'],check=True)
 assert not (app/'embedded.mobileprovision').exists(),'Do not upload account provisioning profiles.'
 output=OUT/'Haven-iOS-unsigned.ipa'
 with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as archive:
