@@ -30,6 +30,7 @@ async function fixture(t,options={}){
 test('unauthenticated visitors cannot see frames, send input, or manage pairing',async t=>{
   const f=await fixture(t);
   assert.equal((await f.request('/api/frame')).status,401);
+  assert.equal((await f.request('/api/displays')).status,401);
   assert.equal((await f.request('/api/input',{data:{type:'text',text:'hello'}})).status,401);
   assert.equal((await f.request('/api/admin/state')).status,403);
   assert.equal((await f.request('/api/admin/pair',{data:{}})).status,403);
@@ -45,6 +46,19 @@ test('a valid pairing code never grants screen access without laptop approval',a
   assert.equal((await f.request('/api/frame',{cookie})).status,200);
   assert.equal((await f.request('/api/input',{cookie,data:{type:'text',text:'hello'}})).status,200);
   assert.deepEqual(f.commands.map(c=>c.type),['capture','text']);
+});
+test('paired phones without a PIN stay paired; display layout requires an approved unexpired session',async t=>{
+  const layout={width:3840,height:1080,screens:[{x:0,y:0,width:1920,height:1080},{x:1920,y:0,width:1920,height:1080}]};
+  const f=await fixture(t,{displays:async()=>layout});const {cookie,device}=await f.pairDevice();
+  assert.equal((await f.request('/api/displays',{cookie})).status,403);
+  await f.approve();
+  const paired=await f.request('/api/device',{cookie:device});
+  assert.deepEqual(await paired.json(),{paired:true,name:'Test iPhone',pinConfigured:false});
+  assert.match(paired.headers.get('set-cookie'),/Max-Age=31536000/);
+  assert.deepEqual(await (await f.request('/api/displays',{cookie})).json(),layout);
+  f.advance(21600001);
+  assert.equal((await f.request('/api/displays',{cookie})).status,401);
+  assert.equal((await (await f.request('/api/device',{cookie:device})).json()).paired,true);
 });
 test('view-only permission is enforced by the server',async t=>{
   const f=await fixture(t),cookie=await f.pair();await f.approve('view');

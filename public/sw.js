@@ -1,6 +1,6 @@
 // Only public assets are cached. Screens, credentials, and API responses never are.
-const CACHE='haven-shell-v3';
-const ASSETS=['/offline.html','/style.css','/polish.css','/black.css','/icon.svg','/apple-touch-icon.png','/icon-192.png','/icon-512.png'];
+const CACHE='haven-shell-v4';
+const ASSETS=['/offline.html','/style.css','/polish.css','/black.css','/remote.css','/icon.svg','/apple-touch-icon.png','/icon-192.png','/icon-512.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)));self.skipWaiting();});
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(names=>Promise.all(names.filter(name=>name.startsWith('haven-shell-')&&name!==CACHE).map(name=>caches.delete(name)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{

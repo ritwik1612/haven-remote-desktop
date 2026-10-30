@@ -17,13 +17,31 @@ internal static class HavenTray {
     [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr window,int command);
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll")] internal static extern bool PostMessage(IntPtr window,uint message,IntPtr w,IntPtr l);
+    [DllImport("user32.dll")] internal static extern bool SetProcessDPIAware();
+
+    internal static void SaveDisplays() {
+        try {
+            var bounds=SystemInformation.VirtualScreen;
+            var json=new StringBuilder("{\"width\":"+bounds.Width+",\"height\":"+bounds.Height+",\"screens\":[");
+            bool first=true;
+            foreach(var screen in Screen.AllScreens) {
+                if(!first)json.Append(',');first=false;
+                var b=screen.Bounds;
+                json.Append("{\"x\":"+(b.X-bounds.X)+",\"y\":"+(b.Y-bounds.Y)+",\"width\":"+b.Width+",\"height\":"+b.Height+",\"primary\":"+(screen.Primary?"true":"false")+"}");
+            }
+            json.Append("]}");
+            var target=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"Haven","display-layout.json");
+            File.WriteAllText(target+".tmp",json.ToString());
+            if(File.Exists(target))File.Replace(target+".tmp",target,null);else File.Move(target+".tmp",target);
+        }catch { /* All displays remains available if metadata cannot be read. */ }
+    }
 
     [STAThread] private static void Main(string[] args) {
         if(Array.IndexOf(args,"--quit")>=0) {var window=FindWindow(null,"Haven tray");if(window!=IntPtr.Zero)PostMessage(window,0x10,IntPtr.Zero,IntPtr.Zero);return;}
         bool created;
         using(var mutex=new Mutex(true,"Local\\HavenNotificationIcon",out created)) {
             if(!created)return;
-            try {Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);using(var context=new TrayContext())Application.Run(context);}
+            try {SetProcessDPIAware();SaveDisplays();Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);using(var context=new TrayContext())Application.Run(context);}
             catch(Exception error) {Directory.CreateDirectory(State);File.WriteAllText(Path.Combine(State,"tray-error.txt"),error.Message);}
             finally {mutex.ReleaseMutex();}
         }
@@ -82,12 +100,14 @@ internal sealed class TrayContext : ApplicationContext {
         icon.DoubleClick+=delegate {HavenTray.OpenGui();};
         menu.Opening+=delegate {status.Text=HavenTray.Status();icon.Text="Haven - "+status.Text;};
         Record(true);
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged+=DisplaysChanged;
     }
+    private void DisplaysChanged(object sender,EventArgs args) {HavenTray.SaveDisplays();}
     private void Record(bool added) {
         File.WriteAllText(Path.Combine(HavenTray.State,"tray-status.json"),"{\"pid\":"+Process.GetCurrentProcess().Id+",\"iconAdded\":"+(added?"true":"false")+",\"nativeFramework\":true,\"tooltip\":\"Haven - "+status.Text+"\"}");
     }
     protected override void ExitThreadCore() {icon.Visible=false;Record(false);base.ExitThreadCore();}
-    protected override void Dispose(bool disposing) {if(disposing) {icon.Visible=false;icon.Dispose();menu.Dispose();window.DestroyHandle();}base.Dispose(disposing);}
+    protected override void Dispose(bool disposing) {if(disposing) {Microsoft.Win32.SystemEvents.DisplaySettingsChanged-=DisplaysChanged;icon.Visible=false;icon.Dispose();menu.Dispose();window.DestroyHandle();}base.Dispose(disposing);}
 }
 
 internal sealed class TrayWindow : NativeWindow {

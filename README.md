@@ -168,3 +168,18 @@ The Android tools/JDK come from official sources and build locally, with no clou
 Use **Devices → End current session** to stop access, or **Forget** to remove a phone. Closing the app leaves the installed host running.
 
 Windows Services can stop **Haven Remote Host** and **TightVNC Server**. Remove TightVNC through Installed Apps. An administrator can uninstall Haven's wrapper with `"C:\Program Files\Haven\HavenService.exe" uninstall`. Remove only Haven's private route with `tailscale serve --https=8443 off`; do not reset unrelated Tailscale services.
+
+
+## Mobile session controls
+
+<img src="docs/screenshots/remote-controls.png" alt="Haven mobile toolbar and display selection, using a synthetic two-monitor desktop" width="280">
+
+The compact toolbar provides Info, Displays, Keyboard, and Disconnect. Tap the floating **•••** button to hide or reveal the toolbar. Haven keeps its own branding while following familiar remote-viewer control conventions.
+
+- **Left click** (default): tap once to click; hold and move to drag windows or select text.
+- **Right click**: opens the context menu at the last pointer location.
+- **Move view** means **pan**: move the zoomed desktop around without sending a mouse click. **Zoom** switches between fitting the display and native pixels.
+- **Keyboard** opens your phone’s normal keyboard (tap the text field if it was dismissed). Type and tap Send or Return; Unicode text and IME composition are supported. It also provides Ctrl, Alt, Shift, Win, navigation keys, F1–F12, and letter keys. Select modifiers, then a key to press the combination together. Quick shortcuts include Win+L, Alt+Tab, and Ctrl+Shift+Esc.
+- **Displays** offers **All displays** as one continuous Windows desktop, or individual connected monitors. This crops the viewer without changing Windows display settings. Display metadata comes from the small tray process at login and when the screen arrangement changes; before metadata is available, All displays still works. If the layout and VNC framebuffer disagree, Haven safely uses All displays.
+
+The iPhone setup page remembers only the laptop address in this browser. The private Home Screen app opens that PC directly. Pairing is kept in a secure browser cookie; use the same installed app after pairing. Clearing website data removes that credential and requires pairing again. If a paired PC has no PIN yet, the phone asks you to set it once in Windows Security settings instead of sending you back to onboarding. Network interruptions never intentionally forget the device.

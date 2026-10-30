@@ -28,7 +28,7 @@ import java.net.URI;
 public class MainActivity extends Activity {
     private WebView web;
     private String allowedOrigin;
-    private final int background=Color.rgb(11,11,20);
+    private final int background=Color.BLACK;
     private int dp(int n) {return Math.round(n*getResources().getDisplayMetrics().density);}
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
             String value=host.getText().toString().trim();if(!value.startsWith("https://"))value="https://"+value;
             URI uri=new URI(value);String hostname=uri.getHost();
             if(!"https".equals(uri.getScheme())||hostname==null||!hostname.endsWith(".ts.net")||uri.getUserInfo()!=null||uri.getRawQuery()!=null||uri.getFragment()!=null||!(uri.getPath().isEmpty()||uri.getPath().equals("/")||uri.getPath().equals("/connect")))throw new Exception();
-            allowedOrigin="https://"+hostname+(uri.getPort()==-1?"":":"+uri.getPort());
+            allowedOrigin="https://"+hostname+(uri.getPort()==-1?":8443":":"+uri.getPort());
             getPreferences(MODE_PRIVATE).edit().putString("host",allowedOrigin).apply();
             ((InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(host.getWindowToken(),0);
             openDesktop();
