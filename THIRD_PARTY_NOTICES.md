@@ -25,3 +25,5 @@ Licenses included by npm and Python packages are retained in the packaged payloa
 ## jsQR 1.4.0
 
 Copyright Cosmo Wolfe. Apache License 2.0. The QR decoder runs locally on the phone. License: `public/vendor/jsqr-LICENSE.txt` (also included with the static iOS setup page). Source: https://github.com/cozmo/jsQR
+
+The 0.1.3 phone input adapter also bundles noVNC 1.7.0 DOMKeyTable and Unicode keysym mapping modules in `public/vendor/keys.js`. Their MPL-2.0 notices and corresponding upstream source are retained with the noVNC bundle. RustDesk and TigerVNC were reviewed for Windows-lock behavior; no RustDesk code was copied into Haven.

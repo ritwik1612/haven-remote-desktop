@@ -2,6 +2,7 @@ import {build} from 'esbuild';
 import {mkdir,copyFile,readdir,writeFile} from 'node:fs/promises';
 const vendor=new URL('../public/vendor/',import.meta.url);
 await mkdir(vendor,{recursive:true});
+await build({stdin:{contents:"export {default as DOMKeyTable} from './node_modules/@novnc/novnc/core/input/domkeytable.js'; export {default as Keysyms} from './node_modules/@novnc/novnc/core/input/keysymdef.js';",resolveDir:process.cwd()},bundle:true,minify:true,format:'esm',target:['safari16.4','chrome100'],outfile:'public/vendor/keys.js',legalComments:'linked',banner:{js:'/*! noVNC 1.7.0 input tables. MPL-2.0. Licenses and corresponding source: /vendor/NOTICE.txt. */'}});
 await build({stdin:{contents:"export {default} from 'jsqr';",resolveDir:process.cwd()},bundle:true,minify:true,format:'esm',target:['safari16.4','chrome100'],outfile:'public/vendor/jsqr.js',banner:{js:'/*! jsQR 1.4.0 - Copyright Cosmo Wolfe. Apache-2.0. See /vendor/jsqr-LICENSE.txt. */'}});
 await copyFile('node_modules/jsqr/LICENSE','public/vendor/jsqr-LICENSE.txt');
 await mkdir('ios/vendor',{recursive:true});

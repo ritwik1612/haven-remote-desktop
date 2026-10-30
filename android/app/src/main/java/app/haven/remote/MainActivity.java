@@ -18,6 +18,7 @@ import android.content.pm.PackageManager;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
@@ -26,13 +27,18 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.ScrollView;
 import java.net.URI;
+import java.io.ByteArrayInputStream;
+import java.util.Arrays;
+import java.util.HashMap;
 
 /** Same-origin private client. No injected JavaScript bridge or password storage. */
 public class MainActivity extends Activity {
     private WebView web;
     private String allowedOrigin;
     private PermissionRequest cameraRequest;
+    private static final String SETUP_ORIGIN="https://appassets.androidplatform.net";
     private final int background=Color.BLACK;
     private int dp(int n) {return Math.round(n*getResources().getDisplayMetrics().density);}
     @Override public void onCreate(Bundle saved) {
@@ -55,7 +61,7 @@ public class MainActivity extends Activity {
             savedPc.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){try{URI uri=new URI(savedHost);if(!"https".equals(uri.getScheme())||uri.getHost()==null||!uri.getHost().endsWith(".ts.net")||uri.getUserInfo()!=null)throw new Exception();allowedOrigin=savedHost;openDesktop();}catch(Exception error){Toast.makeText(MainActivity.this,"Enter the laptop address again.",Toast.LENGTH_LONG).show();}}});
         }
         Button scan=new Button(this);scan.setText("Scan QR");scan.setTextColor(Color.WHITE);scan.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(119,61,216)));layout.addView(scan,new LinearLayout.LayoutParams(-1,dp(60)));
-        scan.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){allowedOrigin="https://haven-ios.vercel.app";openDesktop("https://haven-ios.vercel.app/#scan");}});
+        scan.setOnClickListener(new View.OnClickListener(){@Override public void onClick(View v){allowedOrigin=SETUP_ORIGIN;openDesktop(SETUP_ORIGIN+"/#scan");}});
         layout.addView(text("Connect Tailscale, then enter the private laptop link shown in Haven on your computer.",15,Color.rgb(174,150,194)));
         EditText host=new EditText(this);host.setSingleLine(true);host.setTextSize(15);host.setTextColor(Color.WHITE);host.setHintTextColor(Color.rgb(137,115,157));host.setHint("https://your-laptop.tailnet.ts.net:8443");host.setInputType(17);
         host.setText(getPreferences(MODE_PRIVATE).getString("host",""));layout.addView(host,new LinearLayout.LayoutParams(-1,dp(62)));
@@ -70,7 +76,7 @@ public class MainActivity extends Activity {
             ((InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(host.getWindowToken(),0);
             openDesktop();
         }catch(Exception error){Toast.makeText(MainActivity.this,"Enter the HTTPS .ts.net link from your laptop.",Toast.LENGTH_LONG).show();}}});
-        setContentView(layout);
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(background);scroll.addView(layout);setContentView(scroll);
     }
     private void openDesktop() {openDesktop(allowedOrigin+"/connect");}
     private void openDesktop(String startUrl) {
@@ -80,10 +86,22 @@ public class MainActivity extends Activity {
         web.getSettings().setMixedContentMode(0);web.getSettings().setSafeBrowsingEnabled(true);
         CookieManager.getInstance().setAcceptCookie(true);CookieManager.getInstance().setAcceptThirdPartyCookies(web,false);
         web.setWebViewClient(new WebViewClient(){
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
+                Uri url=request.getUrl();
+                if(!"appassets.androidplatform.net".equals(url.getHost()))return null;
+                String name=url.getPath();if("/".equals(name))name="/index.html";
+                String[] files={"/index.html","/app.js","/host.js","/qr-scanner.js","/qr.css","/style.css","/icon.svg","/apple-touch-icon.png","/vendor/jsqr.js","/vendor/jsqr-LICENSE.txt"};
+                if(!"https".equals(url.getScheme())||!Arrays.asList(files).contains(name))return new WebResourceResponse("text/plain","UTF-8",404,"Not found",new HashMap<String,String>(),new ByteArrayInputStream(new byte[0]));
+                try{
+                    String mime=name.endsWith(".js")?"text/javascript":name.endsWith(".css")?"text/css":name.endsWith(".svg")?"image/svg+xml":name.endsWith(".png")?"image/png":name.endsWith(".html")?"text/html":"text/plain";
+                    HashMap<String,String> headers=new HashMap<String,String>();headers.put("Cache-Control","no-store");headers.put("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; base-uri 'none'");
+                    return new WebResourceResponse(mime,"UTF-8",200,"OK",headers,getAssets().open(name.substring(1)));
+                }catch(Exception error){return new WebResourceResponse("text/plain","UTF-8",404,"Not found",new HashMap<String,String>(),new ByteArrayInputStream(new byte[0]));}
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
                 Uri url=request.getUrl();String origin=url.getScheme()+"://"+url.getHost()+(url.getPort()==-1?"":":"+url.getPort());
                 if(allowedOrigin.equals(origin))return false;
-                if("https://haven-ios.vercel.app".equals(allowedOrigin)&&"https".equals(url.getScheme())&&url.getHost()!=null&&url.getHost().endsWith(".ts.net")&&"/connect".equals(url.getPath())&&url.getUserInfo()==null&&url.getQuery()==null&&url.getFragment()!=null&&url.getFragment().matches("pair=[0-9]{6}")){
+                if(SETUP_ORIGIN.equals(allowedOrigin)&&"https".equals(url.getScheme())&&url.getHost()!=null&&url.getHost().endsWith(".ts.net")&&"/connect".equals(url.getPath())&&url.getUserInfo()==null&&url.getQuery()==null&&url.getFragment()!=null&&url.getFragment().matches("pair=[0-9]{6}")){
                     allowedOrigin=origin;getPreferences(MODE_PRIVATE).edit().putString("host",origin).apply();return false;
                 }
                 if("https".equals(url.getScheme()))startActivity(new Intent(Intent.ACTION_VIEW,url));

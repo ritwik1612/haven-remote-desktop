@@ -1,8 +1,8 @@
 # Haven
 
-**Your desktop. Anywhere.** A Windows background host, an Android APK, and an iPhone Home Screen web app for your own devices. Solid black, purple accents, and metallic grey controls. No RealVNC subscription or paid remote-desktop SDK.
+**Your desktop. Anywhere.** A Windows background host, an Android APK, and an iPhone/iPad IPA plus a Home Screen web app for your own devices. Solid black, purple accents, and metallic grey controls. No RealVNC subscription or paid remote-desktop SDK.
 
-[Download Windows / Android](https://github.com/ritwik1612/haven-remote-desktop/releases/latest) · [Source](https://github.com/ritwik1612/haven-remote-desktop) · [MIT license](LICENSE)
+[Download Windows / Android / iOS](https://github.com/ritwik1612/haven-remote-desktop/releases/latest) · [Source](https://github.com/ritwik1612/haven-remote-desktop) · [MIT license](LICENSE)
 
 <img src="docs/screenshots/desktop.png" alt="Haven Windows dashboard" width="650"> <img src="docs/screenshots/phone.png" alt="Haven phone PIN screen" width="240">
 
@@ -61,7 +61,13 @@ Requires Android 8+ and an updated Android System WebView/Chrome.
 5. Open **Devices** on Windows and approve control or view-only access.
 6. On later visits, enter your chosen six-digit PIN for six-hour access.
 
-The APK stores the laptop address and same-origin browser cookies privately. It does not save the PIN, add a JavaScript-to-Android bridge, accept HTTP, or bypass TLS errors. It requests only internet permission.
+The APK stores the laptop address and same-origin browser cookies privately. It does not save the PIN, add a JavaScript-to-Android bridge, accept HTTP, or bypass TLS errors. It requests internet and optional camera permission. The QR setup assets are bundled in the APK and decoded locally, so Android scanning does not load Vercel.
+
+## iPhone / iPad native IPA
+
+Download **Haven-iOS-unsigned.ipa** from [Releases](https://github.com/ritwik1612/haven-remote-desktop/releases/latest). Follow the [step-by-step Windows sideloading guide](docs/IOS-SIDELOAD-WINDOWS.md). Requires iOS 16.4+. The native app has a local QR scanner, saved PC address, persistent WKWebView pairing storage, and the same private remote controls. Pair once in the new app; Safari and the IPA have separate storage. AltStore signs the IPA using your Apple account. Free signing requires refreshing before seven days expire; it cannot promise a permanent installation.
+
+The native scanner and updated Android scanner run locally. Vercel is not part of either app's desktop or authentication transport. The Safari alternative remains below.
 
 ## iPhone / iPad with Safari
 
@@ -176,7 +182,7 @@ Windows Services can stop **Haven Remote Host** and **TightVNC Server**. Remove 
 
 The compact toolbar provides Info, Displays, Keyboard, and Disconnect. Tap the floating **•••** button to hide or reveal the toolbar. Haven keeps its own branding while following familiar remote-viewer control conventions.
 
-- **Left click** (default): tap once to click; hold and move to drag windows or select text.
+- **Left click** (default): tap once to click; moving a finger only moves the cursor. Choose **Drag** to hold the mouse button intentionally.
 - **Right click**: opens the context menu at the last pointer location.
 - **Move view** means **pan**: move the zoomed desktop around without sending a mouse click. **Zoom** switches between fitting the display and native pixels.
 - **Keyboard** opens your phone’s normal keyboard (tap the text field if it was dismissed). Type and tap Send or Return; Unicode text and IME composition are supported. It also provides Ctrl, Alt, Shift, Win, navigation keys, F1–F12, and letter keys. Select modifiers, then a key to press the combination together. Quick shortcuts include Win+L, Alt+Tab, and Ctrl+Shift+Esc.
@@ -190,3 +196,10 @@ The iPhone setup page remembers only the laptop address in this browser. The pri
 Tap **Scan QR** in the phone app. On Windows, open **Connect phone** and generate a fresh pairing code/QR. Scan it: Haven fills the address and code automatically. Approve a new phone once under Windows **Devices**. A QR only pairs the phone; it never unlocks the desktop. After approval, enter your own six-digit session PIN to open a six-hour session. Saved PCs remain until you remove them or clear/uninstall the app; browsers can also evict website data. Away from the PC, the saved session PIN remains available for returning connections. A session PIN alone cannot pair an unknown device.
 
 **Use a pairing code instead** is the secondary onboarding option. On iPhone, grant camera permission when requested and use the private Home Screen app for a consistent saved pairing. Android's updated APK requests camera access only for scanning; camera hardware is optional. QR images are decoded locally, and the camera stops on success, cancel, or leaving the scanner. The Vercel page never proxies authentication or desktop traffic. QR codes expire after two minutes, are single-use, and never contain your session PIN.
+
+
+## Input fixes in 0.1.3
+
+The phone controller now separates cursor motion from dragging. A stationary tap sends one complete left-click; ordinary motion sends no held-button mask and cannot select text. Right-click and scrolling use the last cursor position and keep that point through monitor switches and zoom changes. All eight mouse controls are visible in two rows. Modifier/Unicode mappings reuse the noVNC DOM key and keysym tables. Shift+letter sends the uppercase keysym, and keys are released in reverse order.
+
+Win+L is routed to Windows LockWorkStation through the current user's native tray process. Win+Shift+S is routed to a native SendInput shortcut in that same interactive process; it also has a quick Snip button. These guarded actions require a valid PIN session with control permission. Their local named pipe allows only the owning Windows user, SYSTEM, and administrators; there is no new network port or arbitrary command execution. The helper blocks while idle rather than polling.

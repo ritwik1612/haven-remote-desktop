@@ -21,10 +21,15 @@ def run(args,**kwargs):
 
 
 source=ROOT/'android'/'app'/'src'/'main'
+assets=BUILD/'assets'
+# Explicit public-file list: never package Vercel account files or .env credentials.
+for name in ['index.html','app.js','host.js','qr-scanner.js','qr.css','style.css','icon.svg','apple-touch-icon.png','vendor/jsqr.js','vendor/jsqr-LICENSE.txt']:
+    destination=assets/name;destination.parent.mkdir(parents=True,exist_ok=True)
+    shutil.copy2(ROOT/'ios'/name,destination)
 shutil.copy2(ROOT/'public'/'icon-192.png',source/'res'/'drawable'/'haven_icon.png')
 for folder in ['gen','classes','dex']:(BUILD/folder).mkdir(exist_ok=True)
 unsigned=BUILD/'unsigned.apk'
-run([SDK/'aapt.exe','package','-f','-M',source/'AndroidManifest.xml','-S',source/'res','-I',ANDROID,'-J',BUILD/'gen','-F',unsigned])
+run([SDK/'aapt.exe','package','-f','-M',source/'AndroidManifest.xml','-S',source/'res','-A',assets,'-I',ANDROID,'-J',BUILD/'gen','-F',unsigned])
 java=list((source/'java').rglob('*.java'))+list((BUILD/'gen').rglob('*.java'))
 run([JDK/'javac.exe','-encoding','UTF-8','-source','8','-target','8','-bootclasspath',ANDROID,'-d',BUILD/'classes',*java])
 run([JDK/'java.exe','-cp',SDK/'lib'/'d8.jar','com.android.tools.r8.D8','--min-api','26','--lib',ANDROID,'--output',BUILD/'dex',*list((BUILD/'classes').rglob('*.class'))])

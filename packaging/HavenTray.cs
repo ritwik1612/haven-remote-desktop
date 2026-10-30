@@ -3,10 +3,13 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.IO.Pipes;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Windows.Forms;
 
 internal static class HavenTray {
@@ -18,6 +21,50 @@ internal static class HavenTray {
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll")] internal static extern bool PostMessage(IntPtr window,uint message,IntPtr w,IntPtr l);
     [DllImport("user32.dll")] internal static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll",SetLastError=true)] internal static extern bool LockWorkStation();
+    [StructLayout(LayoutKind.Explicit,Size=40)] internal struct KeyboardEvent {
+        [FieldOffset(0)] internal uint type;
+        [FieldOffset(8)] internal ushort key;
+        [FieldOffset(12)] internal uint flags;
+    }
+    [DllImport("user32.dll",SetLastError=true)] internal static extern uint SendInput(uint count,KeyboardEvent[] events,int size);
+    private static string Action(string command) {
+        if(command=="ping")return "{\"ok\":true}";
+        if(command=="lock")return LockWorkStation()?"{\"ok\":true}":"{\"ok\":false,\"error\":\"Windows could not lock this interactive desktop.\"}";
+        if(command=="snip") {
+            ushort[] keys={0x5b,0x10,0x53};var down=new KeyboardEvent[3];var up=new KeyboardEvent[3];
+            for(int i=0;i<3;i++) {down[i]=new KeyboardEvent{type=1,key=keys[i],flags=(uint)(i==0?1:0)};up[2-i]=new KeyboardEvent{type=1,key=keys[i],flags=(uint)(2|(i==0?1:0))};}
+            uint sent=0;try {sent=SendInput(3,down,40);Thread.Sleep(35);}finally {SendInput(3,up,40);}
+            return sent==3?"{\"ok\":true}":"{\"ok\":false,\"error\":\"Windows blocked the Snipping Tool shortcut. Unlock the PC first.\"}";
+        }
+        return "{\"ok\":false,\"error\":\"Unsupported Windows action.\"}";
+    }
+    internal static void StartActions() {
+        if(!Directory.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"Haven")))return;
+        var sid=WindowsIdentity.GetCurrent().User;
+        var name="HavenActions-"+sid.Value+"-"+Process.GetCurrentProcess().SessionId;
+        var security=new PipeSecurity();security.SetAccessRuleProtection(true,false);
+        security.AddAccessRule(new PipeAccessRule(sid,PipeAccessRights.FullControl,AccessControlType.Allow));
+        security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid,null),PipeAccessRights.FullControl,AccessControlType.Allow));
+        security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid,null),PipeAccessRights.FullControl,AccessControlType.Allow));
+        ThreadPool.QueueUserWorkItem(delegate {
+            while(true)try {
+                using(var pipe=new NamedPipeServerStream(name,PipeDirection.InOut,1,PipeTransmissionMode.Byte,PipeOptions.Asynchronous,1024,1024,security)) {
+                    var file=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"Haven","action-channel.json");
+                    File.WriteAllText(file,"{\"pipe\":\""+name+"\"}");
+                    pipe.WaitForConnection();
+                    using(var timer=new System.Threading.Timer(delegate {try{pipe.Dispose();}catch{}},null,2500,Timeout.Infinite))
+                    using(var reader=new StreamReader(pipe,new UTF8Encoding(false),false,1024,true))
+                    using(var writer=new StreamWriter(pipe,new UTF8Encoding(false),1024,true)) {
+                        // Fixed words only: no paths, shell commands, or arbitrary input.
+                        var text=new StringBuilder();int c;
+                        while(text.Length<12&&(c=reader.Read())>=0&&c!='\n')text.Append((char)c);
+                        writer.WriteLine(Action(text.ToString()));writer.Flush();
+                    }
+                }
+            }catch {Thread.Sleep(250);}
+        });
+    }
 
     internal static void SaveDisplays() {
         try {
@@ -101,6 +148,7 @@ internal sealed class TrayContext : ApplicationContext {
         menu.Opening+=delegate {status.Text=HavenTray.Status();icon.Text="Haven - "+status.Text;};
         Record(true);
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged+=DisplaysChanged;
+        HavenTray.StartActions();
     }
     private void DisplaysChanged(object sender,EventArgs args) {HavenTray.SaveDisplays();}
     private void Record(bool added) {

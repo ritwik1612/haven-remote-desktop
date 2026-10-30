@@ -12,3 +12,6 @@
 .toolbar-handle{position:absolute;right:12px;top:calc(env(safe-area-inset-top) + 70px);z-index:10;width:44px;height:44px;border-radius:50%;background:#222228e8;color:#ddd;border:1px solid #55555b;font-size:18px;box-shadow:0 3px 12px #0008;touch-action:manipulation}
 .toolbar-hidden .viewer-header,.toolbar-hidden .control-bar,.toolbar-hidden .viewer-status,.toolbar-hidden .keyboard-panel,.toolbar-hidden .text-drawer,.toolbar-hidden .session-popover{display:none!important}.toolbar-hidden .toolbar-handle{top:calc(env(safe-area-inset-top) + 12px)}
 @keyframes remote-reveal{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){.session-popover{animation:none}}@media(max-width:420px){.remote-title span{max-width:100px}.session-tools .button{padding:10px}}
+
+.mobile-remote .screen-wrap{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}.mobile-remote .screen-wrap canvas{touch-action:none;-webkit-touch-callout:none}.mobile-remote button{touch-action:manipulation;-webkit-user-select:none;user-select:none}
+.mobile-remote .control-bar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible;gap:6px}.mobile-remote .control-bar .button{min-width:0;padding:8px 5px;gap:4px;font-size:10px}.mobile-remote .control-bar .button svg{width:14px;height:14px;flex-shrink:0}

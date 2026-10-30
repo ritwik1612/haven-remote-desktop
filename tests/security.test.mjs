@@ -32,10 +32,23 @@ test('unauthenticated visitors cannot see frames, send input, or manage pairing'
   const f=await fixture(t);
   assert.equal((await f.request('/api/frame')).status,401);
   assert.equal((await f.request('/api/displays')).status,401);
+  assert.equal((await f.request('/api/system',{data:{action:'lock'}})).status,401);
   assert.equal((await f.request('/api/input',{data:{type:'text',text:'hello'}})).status,401);
   assert.equal((await f.request('/api/admin/state')).status,403);
   assert.equal((await f.request('/api/admin/pair',{data:{}})).status,403);
   assert.equal(f.commands.length,0);
+});
+
+test('Windows actions require laptop approval, chosen PIN and control permission; only lock and snip are accepted',async t=>{
+  const actions=[];const f=await fixture(t,{systemAction:async(action,guard)=>{assert.equal(guard(),true);actions.push(action);}});
+  let cookie=await f.pair();assert.equal((await f.request('/api/system',{cookie,data:{action:'lock'}})).status,403);
+  await f.approve();assert.equal((await f.request('/api/system',{cookie,data:{action:'lock'}})).status,403);
+  cookie=await f.unlock();assert.equal((await f.request('/api/system',{cookie,data:{action:'shell'}})).status,400);
+  assert.equal((await f.request('/api/system',{cookie,data:{action:'lock'}})).status,200);
+  assert.equal((await f.request('/api/system',{cookie,data:{action:'snip'}})).status,429);f.advance(501);
+  assert.equal((await f.request('/api/system',{cookie,data:{action:'snip'}})).status,200);assert.deepEqual(actions,['lock','snip']);
+  await f.request('/api/admin/revoke',{cookie:f.admin,data:{}});assert.equal((await f.request('/api/system',{cookie,data:{action:'lock'}})).status,401);
+  cookie=await f.pair();await f.approve('view');cookie=await f.unlock();assert.equal((await f.request('/api/system',{cookie,data:{action:'lock'}})).status,403);assert.equal(actions.length,2);
 });
 test('a valid pairing code never grants screen access without laptop approval',async t=>{
   const f=await fixture(t);let cookie=await f.pair();

@@ -26,10 +26,10 @@ test('one tap emits exactly one left click; pan sends no input; selected monitor
     view.select('1');
     const event=(x,y)=>({pointerId:1,clientX:x,clientY:y,button:0,preventDefault(){},stopImmediatePropagation(){}});
     events.get('pointerdown')(event(200,150));events.get('pointerup')(event(200,150));
-    assert.deepEqual(sent,[[2880,540,1],[2880,540,0]]);
+    assert.deepEqual(sent,[[2880,540,0],[2880,540,1],[2880,540,0]]);
     view.zoom();view.setMode('pan');events.get('pointerdown')(event(200,150));events.get('pointermove')(event(250,180));events.get('pointerup')(event(250,180));
-    assert.equal(sent.length,2);
-    view.setMode('click');rfb.viewOnly=true;events.get('pointerdown')(event(200,150));events.get('pointerup')(event(200,150));assert.equal(sent.length,2);
+    assert.equal(sent.length,3);
+    view.setMode('click');rfb.viewOnly=true;events.get('pointerdown')(event(200,150));events.get('pointerup')(event(200,150));assert.equal(sent.length,3);
     view.dispose();assert.equal(events.size,0);
   }finally{globalThis.ResizeObserver=previous;}
 });
